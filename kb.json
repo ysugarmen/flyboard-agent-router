@@ -1,0 +1,146 @@
+[
+    {
+      "id": "KB-001",
+      "title": "What Flyboard does",
+      "tags": ["overview"],
+      "audience": "customer",
+      "last_updated": "2025-10-15",
+      "content": "Flyboard builds production-ready AI voice agents that automate high-volume, repeatable sales and operations workflows. Typical use cases include inbound qualification, outbound follow-ups, appointment scheduling, payment reminders, and post-call summarization."
+    },
+    {
+      "id": "KB-002",
+      "title": "Supported languages",
+      "tags": ["product", "languages"],
+      "audience": "customer",
+      "last_updated": "2025-11-01",
+      "content": "Flyboard agents support Spanish and English by default. Portuguese is available on request depending on the voice provider and evaluation. Additional languages require a scoping call."
+    },
+    {
+      "id": "KB-003",
+      "title": "Integrations overview",
+      "tags": ["integrations", "product"],
+      "audience": "customer",
+      "last_updated": "2025-11-20",
+      "content": "Common integrations include HubSpot, Salesforce, Google Calendar, and custom CRMs via REST. For messaging we can trigger email/SMS/WhatsApp via customer-approved providers."
+    },
+    {
+      "id": "KB-004",
+      "title": "CRM writeback",
+      "tags": ["integrations", "crm"],
+      "audience": "customer",
+      "last_updated": "2025-09-30",
+      "content": "CRM writeback means the agent can create or update records (lead/contact/deal) after a call. Writeback requires: field mapping, a dedicated API token, and approval of the data model. Typical setup time is 2–5 business days."
+    },
+    {
+      "id": "KB-005",
+      "title": "Calendar booking behavior",
+      "tags": ["calendar", "product"],
+      "audience": "customer",
+      "last_updated": "2025-10-02",
+      "content": "Appointment scheduling uses a customer-provided calendar integration. The agent checks availability rules (working hours, buffers, meeting length) and books the earliest slot that matches the customer’s constraints."
+    },
+    {
+      "id": "KB-006",
+      "title": "Pricing model (high level)",
+      "tags": ["pricing"],
+      "audience": "customer",
+      "last_updated": "2025-11-10",
+      "content": "Pricing is composed of a platform fee plus usage-based voice minutes. Enterprise features (advanced analytics, custom SLAs, dedicated routing) may add a fixed monthly amount. Exact quotes depend on volume and complexity."
+    },
+    {
+      "id": "KB-007",
+      "title": "What is included in onboarding",
+      "tags": ["onboarding", "delivery"],
+      "audience": "customer",
+      "last_updated": "2025-10-25",
+      "content": "Standard onboarding includes: workflow definition, call script + guardrails, integration setup (if needed), test calls, and go-live monitoring. Typical onboarding is 1–3 weeks depending on integrations."
+    },
+    {
+      "id": "KB-008",
+      "title": "SLA and uptime (standard)",
+      "tags": ["sla", "reliability"],
+      "audience": "customer",
+      "last_updated": "2025-08-18",
+      "content": "Standard SLA targets 99.5% monthly uptime for the core platform. Incident communication is provided during business hours, with escalation paths for critical issues. Custom SLAs available for enterprise."
+    },
+    {
+      "id": "KB-009",
+      "title": "Latency expectations",
+      "tags": ["reliability", "performance"],
+      "audience": "customer",
+      "last_updated": "2025-11-05",
+      "content": "End-to-end perceived latency depends on telephony provider and model selection. For most production setups, we aim for fast turn-taking and stable conversations. Low latency configurations may trade off some reasoning depth."
+    },
+    {
+      "id": "KB-010",
+      "title": "Data retention policy (default)",
+      "tags": ["security", "compliance"],
+      "audience": "customer",
+      "last_updated": "2025-10-05",
+      "content": "By default, call metadata and agent outputs are retained for 90 days. Retention can be shortened or extended by agreement. Sensitive fields can be redacted before storage depending on customer requirements."
+    },
+    {
+      "id": "KB-011",
+      "title": "PII handling",
+      "tags": ["security", "compliance"],
+      "audience": "customer",
+      "last_updated": "2025-10-05",
+      "content": "We follow least-privilege access and minimize PII. For workflows involving personal data, we recommend explicit redaction rules and a documented data map. Customers remain data controllers for their datasets."
+    },
+    {
+      "id": "KB-012",
+      "title": "Outbound calling prerequisites",
+      "tags": ["telephony", "outbound"],
+      "audience": "customer",
+      "last_updated": "2025-09-12",
+      "content": "Outbound campaigns require: approved calling lists, calling windows, opt-out handling, and compliant local calling practices. The customer is responsible for ensuring lawful basis and consent where required."
+    },
+    {
+      "id": "KB-013",
+      "title": "Opt-out behavior",
+      "tags": ["compliance", "outbound"],
+      "audience": "internal",
+      "last_updated": "2025-09-12",
+      "content": "If a user requests not to be contacted, the agent must confirm opt-out and tag the record as do-not-contact. Downstream systems should respect the do-not-contact tag."
+    },
+    {
+      "id": "KB-014",
+      "title": "Troubleshooting: audio quality complaints",
+      "tags": ["troubleshooting", "telephony"],
+      "audience": "internal",
+      "last_updated": "2025-11-22",
+      "content": "First checks: provider incident status, jitter/packet loss, regional routing, and voice model stability. Collect: call_id, timestamp, region, provider, and a short user description. Escalate if repeated across regions."
+    },
+    {
+      "id": "KB-015",
+      "title": "Troubleshooting: failed CRM writeback",
+      "tags": ["troubleshooting", "integrations", "crm"],
+      "audience": "internal",
+      "last_updated": "2025-11-22",
+      "content": "Common causes: expired tokens, field mapping drift, permission changes, rate limits. Collect: customer_id, integration type, error logs, and a sample payload. Create a ticket with high priority if blocking go-live."
+    },
+    {
+      "id": "KB-016",
+      "title": "Escalation policy",
+      "tags": ["operations", "sla"],
+      "audience": "internal",
+      "last_updated": "2025-10-30",
+      "content": "Escalate immediately if: widespread call failures, booking failures, CRM writeback failures for multiple customers, or any suspected data leak. Use priority 'high' tickets for incidents affecting production."
+    },
+    {
+      "id": "KB-017",
+      "title": "How to request a custom SLA",
+      "tags": ["sla", "sales"],
+      "audience": "customer",
+      "last_updated": "2025-08-18",
+      "content": "Custom SLAs are available for enterprise plans. Requirements typically include dedicated monitoring, agreed response times, and defined severity levels. A scoping call is required."
+    },
+    {
+      "id": "KB-018",
+      "title": "Supported CRMs",
+      "tags": ["integrations", "crm"],
+      "audience": "customer",
+      "last_updated": "2025-11-20",
+      "content": "Common supported CRMs: HubSpot and Salesforce. Custom CRMs can be supported via REST APIs or middleware, depending on authentication and data model."
+    }
+  ]

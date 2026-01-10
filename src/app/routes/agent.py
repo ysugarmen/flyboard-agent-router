@@ -6,13 +6,13 @@ from fastapi.responses import JSONResponse
 from app.utils.logger import get_logger
 from app.schemas.agent import RunRequest, RunResponse
 from agent.runner import run_task
-from agent.runner import UpstreamModelError
+from agent.runner import UpstreamModelError, ToolIterationLimitError
 
 
 logger = get_logger("routes.agent")
 
 router = APIRouter(
-    prefix="/agent",
+    prefix="/v1/agent",
     tags=["agent"],
 )
 
@@ -41,6 +41,18 @@ def run_agent(request: RunRequest) -> RunResponse:
                 "trace_id": e.trace_id,
                 "error": "upstream_error",
                 "message": str(e),
+            },
+        )
+    
+    except ToolIterationLimitError as e:
+        logger.warning("Tool iteration limit exceeded trace_id=%s max_iterations=%d", e.trace_id, e.max_iterations)
+        return JSONResponse(
+            status_code=500,
+            content={
+                "trace_id": e.trace_id,
+                "error": "tool_iteration_limit",
+                "message": str(e),
+                "max_iterations": e.max_iterations,
             },
         )
 

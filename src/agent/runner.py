@@ -29,6 +29,17 @@ class UpstreamModelError(RuntimeError):
         self.trace_id = trace_id
 
 
+class ToolIterationLimitError(RuntimeError):
+    """
+    Raised when tool iterations limit is reached;
+    """
+    def __init__(self, trace_id: str, max_iterations: int):
+        message = f"Tool iterations limit reached, max: {max_iterations}"
+        super().__init__(message)
+        self.trace_id = trace_id
+        self.max_iterations = max_iterations
+
+
 def _system_prompt(language: Optional[str]) -> str:
     lang_line = ""
     if language:
@@ -61,7 +72,15 @@ def _tool_definitions() -> List[dict]:
                 "type": "object",
                 "properties": {
                     "query": {"type": "string"},
-                    "top_k": {"type": "integer", "default": 3},
+                    "top_k": {"type": "integer", "default": 5},
+                    "filters": {
+                        "type": "object",
+                        "properties": {
+                            "audience": {"type": "string"},
+                            "tags": {"type": "array", "items": {"type": "string"}}
+                        },
+                        "additionalProperties": False,
+                    },
                 },
                 "required": ["query"],
                 "additionalProperties": False,
@@ -74,12 +93,11 @@ def _tool_definitions() -> List[dict]:
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "customer_id": {"type": "string"},
                     "title": {"type": "string"},
-                    "description": {"type": "string"},
-                    "severity": {"type": "string", "enum": ["low", "medium", "high", "critical"]},
+                    "body": {"type": "string"},
+                    "priority": {"type": "string", "enum": ["low", "medium", "high"]},
                 },
-                "required": ["customer_id", "title", "description"],
+                "required": ["title", "body", "priority"],
                 "additionalProperties": False,
             },
         },
@@ -90,11 +108,11 @@ def _tool_definitions() -> List[dict]:
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "customer_id": {"type": "string"},
-                    "when": {"type": "string", "description": "ISO-8601 datetime or natural language like 'tomorrow 10:00'"},
-                    "notes": {"type": "string"},
+                    "datetime_iso": {"type": "string", "description": "ISO-8601 datetime"},
+                    "contact": {"type": "string"},
+                    "channel": {"type": "string", "enum": ["email", "phone", "whatsapp"]},
                 },
-                "required": ["customer_id", "when"],
+                "required": ["datetime_iso", "contact", "channel"],
                 "additionalProperties": False,
             },
         },
@@ -217,7 +235,7 @@ def run_task(task: str, customer_id: Optional[str] = None, language: Optional[st
             if calls:
                 tool_iterations += 1
                 if tool_iterations > max_tool_iterations:
-                    raise ValueError(f"tool iteration cap exceeded (max {max_tool_iterations})")
+                    raise ToolIterationLimitError(trace_id=trace_id, max_iterations=max_tool_iterations)
             
                 for call_id, name, args_json in calls:
                     messages.append(
@@ -272,7 +290,7 @@ def run_task(task: str, customer_id: Optional[str] = None, language: Optional[st
                 },
             }
             
-    except UpstreamModelError:
+    except (UpstreamModelError, ToolIterationLimitError):
         raise
     except Exception as e:
         msg = str(e).lower()
