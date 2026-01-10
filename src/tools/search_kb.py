@@ -6,9 +6,23 @@ from dataclasses import dataclass
 from typing import List, Optional, Any, Dict, Tuple
 from pathlib import Path
 
+from app.core.config import get_settings
+
 # Regular expression to tokenize text into words (alphanumeric sequences)
 _TOKEN_RE = re.compile(r"[a-z0-9]+", re.IGNORECASE)
-_DB_PATH = Path(__file__).parent.parent.parent / "kb.json"
+_BASE_DIR = Path(__file__).resolve().parent.parent.parent
+
+settings = get_settings()
+
+
+def _resolve_db_path() -> Path:
+    path = Path(settings.KB_PATH)
+    if not path.is_absolute():
+        path = _BASE_DIR / path
+    return path
+
+
+_DB_PATH = _resolve_db_path()
 
 
 # ---------------------
@@ -157,7 +171,7 @@ def _apply_filters(entry: KBEntry, filters: Optional[Dict[str, Any]] = None) -> 
 # ---------------------
 # Search function
 # ---------------------
-def search_kb(query: str, top_k: Optional[int] = 5, filters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def search_kb(query: str, top_k: Optional[int] = None, filters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """
     Search the KB for relevant entries.
     
@@ -173,7 +187,8 @@ def search_kb(query: str, top_k: Optional[int] = 5, filters: Optional[Dict[str, 
     
     query_tokens = _tokenize(query)
     kb = _load_kb()
-    top_k = max(1, min(top_k, 10))  # cap at 10
+    effective_top_k = top_k if top_k is not None else settings.KB_TOP_K_DEFAULT
+    effective_top_k = max(1, min(effective_top_k, 10))  # cap at 10
     scored_entries: List[Tuple[KBEntry, int]] = []
 
     for entry in kb:
@@ -185,7 +200,7 @@ def search_kb(query: str, top_k: Optional[int] = 5, filters: Optional[Dict[str, 
     
     # Sort by score, then most recent last_updated if present
     scored_entries.sort(key=lambda x: (x[1], x[0].last_updated if x[0].last_updated else ""), reverse=True)
-    top_entries = scored_entries[:top_k]
+    top_entries = scored_entries[:effective_top_k]
 
     max_score = top_entries[0][1] if scored_entries else 0.0
     results = []
