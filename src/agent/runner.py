@@ -43,74 +43,59 @@ def _system_prompt(language: Optional[str]) -> str:
         f"{lang_line}"
         "- When the user asks to open a ticket or schedule follow-up, use the tools.\n"
         "- Be concise and accurate.\n"
+        "- Always end with a concrete checklist and a recommended next action.\n"
+        "- Do not ask the user questions unless required to proceed.\n"
+        
     )
 
-def _tool_definitions() -> List[Dict[str, Any]]:
+def _tool_definitions() -> List[dict]:
     """
     JSON schema tool definitions for OpenAI Responses API tool calling. :contentReference[oaicite:5]{index=5}
     """
     return [
         {
             "type": "function",
-            "function": {
-                "name": "search_kb",
-                "description": "Search the internal knowledge base for relevant entries.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "query": {"type": "string"},
-                        "top_k": {
-                            "type": "integer",
-                            "default": settings.KB_TOP_K_DEFAULT,
-                            "minimum": 1,
-                            "maximum": 10,
-                        },
-                        "filters": {
-                            "type": "object",
-                            "properties": {
-                                "tags": {"type": "array", "items": {"type": "string"}},
-                                "audience": {"type": "string"},
-                            },
-                            "additionalProperties": True,
-                        },
-                    },
-                    "required": ["query"],
-                    "additionalProperties": False,
+            "name": "search_kb",
+            "description": "Search the internal knowledge base for relevant entries.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"},
+                    "top_k": {"type": "integer", "default": 3},
                 },
+                "required": ["query"],
+                "additionalProperties": False,
             },
         },
         {
             "type": "function",
-            "function": {
-                "name": "create_ticket",
-                "description": "Create a support ticket for ops/support.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "title": {"type": "string"},
-                        "body": {"type": "string"},
-                        "priority": {"type": "string", "enum": ["low", "medium", "high"]},
-                    },
-                    "required": ["title", "body", "priority"],
-                    "additionalProperties": False,
+            "name": "create_ticket",
+            "description": "Create a support ticket for the customer.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "customer_id": {"type": "string"},
+                    "title": {"type": "string"},
+                    "description": {"type": "string"},
+                    "severity": {"type": "string", "enum": ["low", "medium", "high", "critical"]},
                 },
+                "required": ["customer_id", "title", "description"],
+                "additionalProperties": False,
             },
         },
         {
             "type": "function",
-            "function": {
-                "name": "schedule_followup",
-                "description": "Schedule a follow-up for a given datetime and contact channel.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "datetime_iso": {"type": "string", "description": "ISO 8601 datetime"},
-                        "contact": {"type": "string"},
-                        "channel": {"type": "string", "enum": ["email", "phone", "whatsapp"]},
-                    },
-                    "required": ["datetime_iso", "contact", "channel"],
-                    "additionalProperties": False,
+            "name": "schedule_followup",
+            "description": "Schedule a follow-up with the customer.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "customer_id": {"type": "string"},
+                    "when": {"type": "string", "description": "ISO-8601 datetime or natural language like 'tomorrow 10:00'"},
+                    "notes": {"type": "string"},
                 },
+                "required": ["customer_id", "when"],
+                "additionalProperties": False,
             },
         },
     ]
@@ -197,8 +182,8 @@ def run_task(task: str, customer_id: Optional[str] = None, language: Optional[st
     
     system_prompt = _system_prompt(language)
     messages: List[Dict[str, Any]] = [
-        {"role": "system", "content": [{"type": "text", "text": system_prompt}]},
-        {"role": "user", "content": [{"type": "text", "text": user_text}]},
+        {"role": "system", "content": [{"type": "input_text", "text": system_prompt}]},
+        {"role": "user", "content": [{"type": "input_text", "text": user_text}]},
     ]
 
     api_key = settings.OPENAI_API_KEY
@@ -235,6 +220,14 @@ def run_task(task: str, customer_id: Optional[str] = None, language: Optional[st
                     raise ValueError(f"tool iteration cap exceeded (max {max_tool_iterations})")
             
                 for call_id, name, args_json in calls:
+                    messages.append(
+                        {
+                            "type": "function_call",
+                            "call_id": call_id,
+                            "name": name,
+                            "arguments": args_json,
+                        }
+                    )
                     try:
                         args = json.loads(args_json) if isinstance(args_json, str) else (args_json or {})
                         if not isinstance(args, dict):
@@ -260,24 +253,24 @@ def run_task(task: str, customer_id: Optional[str] = None, language: Optional[st
                         }
                     )
 
-                    continue  # Process next tool call if any
+                continue 
 
-                final_answer = _extract_text_from_response(resp)
-                if not final_answer:
-                    final_answer = "I couldn't generate a final answer. Please try again."
-                
-                total_latency_ms = int((time.time() - t0) * 1000)
+            final_answer = _extract_text_from_response(resp)
+            if not final_answer:
+                final_answer = "I couldn't generate a final answer. Please try again."
+            
+            total_latency_ms = int((time.time() - t0) * 1000)
 
-                return {
-                    "trace_id": trace_id,
-                    "final_answer": final_answer,
-                    "tool_calls": tool_call_records,
-                    "metrics": {
-                        "latency_ms": total_latency_ms,
-                        "model": model_name,
-                        "openai_calls": openai_calls,
-                    },
-                }
+            return {
+                "trace_id": trace_id,
+                "final_answer": final_answer,
+                "tool_calls": tool_call_records,
+                "metrics": {
+                    "latency_ms": total_latency_ms,
+                    "model": model_name,
+                    "openai_calls": openai_calls,
+                },
+            }
             
     except UpstreamModelError:
         raise
