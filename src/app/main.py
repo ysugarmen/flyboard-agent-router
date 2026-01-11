@@ -6,10 +6,10 @@ from fastapi import FastAPI
 from fastapi import Request
 from contextlib import asynccontextmanager
 
-from app.core.config import get_settings
-from app.routes.agent import router as agent_router
-from app.routes.health import router as health_router
-from app.utils.logger import get_logger
+from src.app.core.config import get_settings
+from src.app.routes.agent import router as agent_router
+from src.app.routes.health import router as health_router
+from src.app.utils.logger import get_logger
 
 settings = get_settings()
 logger = get_logger(__name__, log_level=settings.LOG_LEVEL, log_file=f"{settings.APP_NAME}.log")

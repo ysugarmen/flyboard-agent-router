@@ -4,7 +4,7 @@ from typing import Optional, Union
 
 from logging.handlers import TimedRotatingFileHandler
 
-from app.core.config import get_settings
+from src.app.core.config import get_settings
 
 settings = get_settings()
 

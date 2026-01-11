@@ -9,11 +9,11 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from openai import OpenAI
 
-from app.core.config import get_settings
-from app.utils.logger import get_logger
-from tools.search_kb import search_kb
-from tools.create_tickets import create_ticket
-from tools.followup import schedule_followup
+from src.app.utils.logger import get_logger
+from src.tools.search_kb import search_kb
+from src.tools.create_tickets import create_ticket
+from src.tools.followup import schedule_followup
+from src.app.core.config import get_settings
 
 logger = get_logger("agent.runner")
 
@@ -56,7 +56,9 @@ def _system_prompt(language: Optional[str]) -> str:
         "- Be concise and accurate.\n"
         "- Always end with a concrete checklist and a recommended next action.\n"
         "- Do not ask the user questions unless required to proceed.\n"
-        
+        "CITATIONS:"
+        "- If you use information from the knowledge base, cite the source inline using the KB id in square brackets, e.g. [KB-006]."
+        "- Only cite KB entries that actually appear in tool results."
     )
 
 def _tool_definitions() -> List[dict]:
@@ -76,7 +78,7 @@ def _tool_definitions() -> List[dict]:
                     "filters": {
                         "type": "object",
                         "properties": {
-                            "audience": {"type": "string"},
+                            "audience": {"type": "string", "enum": ["internal", "customer"]},
                             "tags": {"type": "array", "items": {"type": "string"}}
                         },
                         "additionalProperties": False,
