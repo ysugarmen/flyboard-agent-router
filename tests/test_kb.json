@@ -1,0 +1,35 @@
+[
+  {
+    "id": "KB-001",
+    "title": "CRM integration basics",
+    "tags": [
+      "crm",
+      "integration"
+    ],
+    "audience": "customer",
+    "last_updated": "2024-06-10",
+    "content": "Use the CRM integration to sync accounts."
+  },
+  {
+    "id": "KB-002",
+    "title": "Email troubleshooting",
+    "tags": [
+      "email"
+    ],
+    "audience": "internal",
+    "last_updated": "2024-06-05",
+    "content": "If email fails, check the SMTP settings."
+  },
+  {
+    "id": "KB-003",
+    "title": "CRM escalation guide",
+    "tags": [
+      "crm",
+      "operations",
+      "escalation"
+    ],
+    "audience": "internal",
+    "last_updated": "2024-06-12",
+    "content": "Escalate CRM issues to the operations team."
+  }
+]
