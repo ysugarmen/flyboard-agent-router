@@ -280,7 +280,7 @@ def run_task(task: str, customer_id: Optional[str] = None, language: Optional[st
                 final_answer = "I couldn't generate a final answer. Please try again."
             
             total_latency_ms = int((time.time() - t0) * 1000)
-
+            logger.info(f"trace_id={trace_id} openai_calls={openai_calls}")
             return {
                 "trace_id": trace_id,
                 "final_answer": final_answer,
