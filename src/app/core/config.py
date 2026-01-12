@@ -17,7 +17,7 @@ class Settings(BaseSettings):
 
     # Kb
     KB_PATH: str = Field(default="kb.json")
-    KB_TOP_K_DEFAULT: int = Field(default=3)
+    KB_TOP_K_DEFAULT: int = Field(default=5)
 
     # Agent Router
     AGENT_MAX_SECONDS: int = Field(default=60)

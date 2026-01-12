@@ -30,7 +30,10 @@ def run_agent(request: RunRequest) -> RunResponse:
             language=request.language
         )
 
-        logger.info(f"Task {request.task} completed in {time.time() - start_time:.2f} seconds.")
+        logger.info(
+            f"trace_id={response['trace_id']} task={request.task} completed in {time.time() - start_time:.2f} seconds"
+        )
+
         return response
     
     except UpstreamModelError as e:
