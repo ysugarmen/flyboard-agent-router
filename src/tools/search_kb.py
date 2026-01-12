@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import re
+
+from collections import Counter
 from dataclasses import dataclass
 from typing import List, Optional, Any, Dict, Tuple
 from pathlib import Path
@@ -26,9 +28,7 @@ _SYNONYMS = {
     "hubspot": "crm",
     "salesforce": "crm",
     "ops": "operations",
-    "ticket": "ticket",
     "tickets": "ticket",
-    "writeback": "writeback",
     "write": "write",
     "back": "back",
     "failing": "failed",
@@ -68,17 +68,6 @@ def _tokenize(text: str) -> List[str]:
     return out
 
 
-
-def _is_troubleshooting_query(query_tokens: List[str]) -> bool:
-    q = set(query_tokens)
-    return len(q.intersection(_TROUBLESHOOTING_HINTS)) > 0
-
-
-def _is_escalation_query(query_tokens: List[str]) -> bool:
-    q = set(query_tokens)
-    return len(q.intersection(_ESCALATION_HINTS)) > 0
-
-
 @dataclass(frozen=True)
 class KBEntry:
     id: str
@@ -99,9 +88,51 @@ class KBEntry:
             content=str(data["content"]),
         )
 
+
+@dataclass(frozen=True)
+class _IndexedEntry:
+    entry: KBEntry
+    title_tf: Counter[str]
+    content_tf: Counter[str]
+    tags_lc: List[str]
+    audience_lc: str
+
+
 # Cache KB in memory
-_KB_CACHE: Optional[List[KBEntry]] = None
+_KB_INDEX: Optional[List[_IndexedEntry]] = None
 _KB_MTIME: Optional[float] = None
+
+
+def _load_kb_index() -> List[_IndexedEntry]:
+    global _KB_INDEX, _KB_MTIME
+
+    mtime = _DB_PATH.stat().st_mtime
+    if _KB_INDEX is not None and _KB_MTIME == mtime:
+        return _KB_INDEX
+
+    raw = json.loads(_DB_PATH.read_text(encoding="utf-8"))
+    entries = [KBEntry.from_dict(entry) for entry in raw]
+
+    indexed: List[_IndexedEntry] = []
+    for entry in entries:
+        title_tf = Counter(_tokenize(entry.title))
+        content_tf = Counter(_tokenize(entry.content))
+        tags_lc = [str(tag).lower() for tag in entry.tags]
+        audience_lc = (entry.audience or "").lower()
+
+        indexed.append(_IndexedEntry(
+            entry=entry,
+            title_tf=title_tf,
+            content_tf=content_tf,
+            tags_lc=tags_lc,
+            audience_lc=audience_lc,
+        ))
+    
+    _KB_INDEX = indexed
+    _KB_MTIME = mtime
+    return indexed
+
+        
 
 # ---------------------
 # Core functions
@@ -117,22 +148,18 @@ def _build_snippet(content: str, query_tokens: List[str], snippet_length: int = 
     if not query_tokens:
         # if no query tokens, just return the start of the content
         return c[:snippet_length] + ("..." if len(c) > snippet_length else "")
+    
+    
     lower_c = c.lower()
-    first_pos = None
-    matched = None
+    positions = [lower_c.find(t) for t in set(query_tokens)]
+    positions = [p for p in positions if p >= 0]
 
-    # Find the first occurrence of any query token- bubble search
-    for token in query_tokens:
-        pos = lower_c.find(token)
-        if pos != -1 and (first_pos is None or pos < first_pos):
-            first_pos = pos
-            matched = token
-
-    if first_pos is None:
-        # no match found, return the start of the content
+    if not positions:
+        # if no query tokens found, return the start of the content
         return c[:snippet_length] + ("..." if len(c) > snippet_length else "")
 
     # Build snippet around the first match
+    first_pos = min(positions)
     start = max(0, first_pos - snippet_length // 2)
     end = min(len(c), start + snippet_length)
     snippet = c[start:end].strip()
@@ -145,25 +172,7 @@ def _build_snippet(content: str, query_tokens: List[str], snippet_length: int = 
     return snippet
 
 
-def _load_kb() -> List[KBEntry]:
-    global _KB_CACHE, _KB_MTIME
-    
-    # if data is cached and file not modified, return cache
-    mtime = _DB_PATH.stat().st_mtime
-    if _KB_CACHE is not None and _KB_MTIME == mtime:
-        return _KB_CACHE
-    
-    data = json.loads(_DB_PATH.read_text(encoding="utf-8"))
-    if not isinstance(data, list):
-        raise ValueError("KB data should be a list of entries")
-    
-    kb_entries = [KBEntry.from_dict(entry) for entry in data]
-    _KB_CACHE = kb_entries
-    _KB_MTIME = mtime
-    return kb_entries
-
-
-def _score_entry(entry: KBEntry, query_tokens: List[str]) -> int:
+def _score_entry(indexed_entry: _IndexedEntry, query_tokens: Counter[str]) -> int:
     """
     simple keyword matching score:
     - title token hit: +5
@@ -171,25 +180,19 @@ def _score_entry(entry: KBEntry, query_tokens: List[str]) -> int:
     - content token hit: +1
     Also counts multiple occurrences in content/title via .count.
     """
-    title = entry.title.lower()
-    content = entry.content.lower()
-    tags = entry.tags
-    tags = [str(tag.lower()) for tag in tags]
-
-    title_tokens = _tokenize(title)
-    content_tokens = _tokenize(content)
-    
     score = 0
-    for token in query_tokens:
-        score += 5 * title_tokens.count(token)
-        score += 3 * tags.count(token)
-        score += 1 * content_tokens.count(token)
-    
+    tags = indexed_entry.tags_lc
+
+    for t, query_count in query_tokens.items():
+        score += query_count * (5 * indexed_entry.title_tf.get(t, 0))
+        score += query_count * (3 * tags.count(t))
+        score += query_count * (indexed_entry.content_tf.get(t, 0))
+
     return score
 
 
 def _soft_preference_bonus(
-    entry: KBEntry,
+    indexed_entry: _IndexedEntry,
     query_tokens: List[str],
     filters: Optional[Dict[str, Any]],
 ) -> int:
@@ -197,45 +200,28 @@ def _soft_preference_bonus(
     Soft preference boosts to improve robustness when the model sends imperfect filters.
     """
     bonus_score = 0
-    entry_audience = entry.audience.lower()
-    entry_title = entry.title.lower()
-    entry_tags = [tag.lower() for tag in entry.tags]
+    query_set = set(query_tokens)
 
-    is_troubleshooting = _is_troubleshooting_query(query_tokens)
-    is_escalation = _is_escalation_query(query_tokens)
-
-    if is_troubleshooting and entry_audience == "internal":
-        bonus_score += 4
-    
-    else:
-        if entry_audience == "customer":
+    if query_set & _TROUBLESHOOTING_HINTS:
+        if indexed_entry.audience_lc == "internal":
             bonus_score += 2
     
-    if is_escalation:
-        if "escalation" in entry_title:
-            bonus_score += 8
-        if "operations" in entry_tags or "sla" in entry_tags:
-            bonus_score += 4
-        if entry_audience == "internal":
-            bonus_score += 1
-
+    if query_set & _ESCALATION_HINTS:
+        if "operations" in indexed_entry.tags_lc or "escalation" in indexed_entry.entry.title.lower():
+            bonus_score += 2
+    
     if not filters:
         return bonus_score
     
-    requested_audience_val = filters.get("audience")
-    if requested_audience_val.strip():
-        requested_audience = requested_audience_val.lower().strip()
-
-        if (is_troubleshooting and requested_audience == "internal") or (not is_troubleshooting and requested_audience == "customer"):
-            if entry_audience == requested_audience:
-                bonus_score += 2
+    audience_req = str(filters.get("audience", "")).strip().lower()
+    if audience_req and indexed_entry.audience_lc == audience_req:
+        bonus_score += 2
     
-    requested_tags = filters.get("tags")
-    if requested_tags:
-        need = {tag.lower() for tag in requested_tags if str(tag).strip()}
-        have = {tag.lower() for tag in entry.tags}
-        overlap = len(need.intersection(have))
-        bonus_score += 1 * overlap
+    tags_req = filters.get("tags", [])
+    if tags_req:
+        need = {tag.lower() for tag in tags_req if str(tag).strip()}
+        have = {tag.lower() for tag in indexed_entry.tags_lc}
+        bonus_score += len(need & have)
     
     return bonus_score
 
@@ -258,27 +244,32 @@ def search_kb(query: str, top_k: Optional[int] = None, filters: Optional[Dict[st
         raise ValueError("query must be a non-empty string")
     
     query_tokens = _tokenize(query)
-    kb = _load_kb()
-    effective_top_k = top_k if top_k is not None else settings.KB_TOP_K_DEFAULT
-    effective_top_k = max(1, min(effective_top_k, 10))  # cap at 10
-    scored_entries: List[Tuple[KBEntry, int]] = []
+    query_tf = Counter(query_tokens)
 
-    for entry in kb:
-        base = _score_entry(entry, query_tokens)
+    kb_index = _load_kb_index()
+
+    effective_top_k = int(top_k) if top_k is not None else settings.KB_TOP_K_DEFAULT
+    effective_top_k = max(1, min(effective_top_k, 10))  # cap at 10
+    scored_entries: List[Tuple[_IndexedEntry, int]] = []
+
+    for idx_entry in kb_index:
+        base = _score_entry(idx_entry, query_tf)
         if base == 0:
             continue
         
-        score = base + _soft_preference_bonus(entry, query_tokens, filters)
-        scored_entries.append((entry, score))
+        score = base + _soft_preference_bonus(idx_entry, query_tokens, filters)
+        scored_entries.append((idx_entry, score))
     
     # Sort by score, then most recent last_updated if present
-    scored_entries.sort(key=lambda x: (x[1], x[0].last_updated if x[0].last_updated else ""), reverse=True)
+    scored_entries.sort(key=lambda x: (x[1], x[0].entry.last_updated or ""), reverse=True)
     top_entries = scored_entries[:effective_top_k]
 
     max_score = top_entries[0][1] if top_entries else 0.0
-    results = []
-    for entry, score in top_entries:
+    results: List[Dict[str, Any]] = []
+
+    for idx_entry, score in top_entries:
         norm = (score / max_score) if max_score else 0.0
+        entry = idx_entry.entry
         snippet = _build_snippet(entry.content, query_tokens)
         results.append({
             "id": entry.id,
